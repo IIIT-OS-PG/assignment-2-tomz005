@@ -8,10 +8,40 @@
 #include <string.h> 
 #include <iostream>
 #include <cstdlib>
+#include <sys/stat.h>
+//#include <openssl/sha.h>
 #define PORT 8080
 #define PORT1 9090
 #define BUFF_SIZE 512
 using namespace std;
+
+char* tracker_ipaddr= (char*)malloc(16);
+int tracker_port;
+bool login;
+
+
+//Read tracker_info.txt
+int readfile(const char* inpfile,int tracker_no)
+{
+    FILE *tracker_fp=fopen(inpfile,"r");
+    
+    int t;
+    if(tracker_fp==NULL)
+    {
+        cout<<"error"<<endl;
+        return 0; // no such file exists
+    }
+    
+    while(fscanf(tracker_fp,"%d %s %d",&t,tracker_ipaddr,&tracker_port)!=EOF)
+    {
+        //cout<<ipaddr;
+        if(tracker_no == t)
+        return 1;
+    }  
+    return 2;
+}
+
+
 
 //thread for handling client in server mode
 void* request_handler(void* socket_desc)
@@ -129,9 +159,36 @@ void* server_mode(void* port)
     close(peerserver_fd);
 }
 
+int download_from_peer(char filename[],char filepath[],char peerip[],int peerport)
+{
+    struct sockaddr_in peer_server_address;
+    int peer_server_address_len=sizeof(peer_server_address);
+    int peer_sock;
+    if ((peer_sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) 
+    { 
+        printf("\n Socket creation error \n"); 
+        return -1; 
+    } 
+   printf("[+]P2P: Socket creation done\n");
+    peer_server_address.sin_family = AF_INET; 
+    peer_server_address.sin_addr.s_addr = inet_addr(peerip); 
+    peer_server_address.sin_port = htons(peerport); 
+    int status =connect(peer_sock, (struct sockaddr *)&peer_server_address,peer_server_address_len);
+    if(status<0)
+    {
+        printf("[-] Connection failed with peer server\n");
+        return -1;
+    }
+    printf("[+] Connection established to %s:%d\n",inet_ntoa(peer_server_address.sin_addr),ntohs(peer_server_address.sin_port));
+
+}
 
 int main(int argc, char const *argv[]) 
 { 
+    //own ip
+    struct sockaddr_in my_addr;
+    char my_ip[16];
+    int my_addr_len=sizeof(my_addr);
     //Peer - Server mode thread
     pthread_t psid;
     FILE *fp1;
@@ -143,7 +200,7 @@ int main(int argc, char const *argv[])
     //pthread_join(psid,NULL);
     sleep(2);
     int sock = 0, valread; 
-    struct sockaddr_in serv_addr; 
+    struct sockaddr_in tracker_addr; 
     //char buffer[1024] = {0}; 
     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) 
     { 
@@ -152,47 +209,175 @@ int main(int argc, char const *argv[])
     } 
    printf("[+]C: Socket creation done\n");
    //bzero(&serv_addr,sizeof(serv_addr));
-   int psdport;
-   cout<<"Enter peer-server port from where file to download\n";
+    //Calling readfile to get tracker_1 ip & port
+    int r=readfile(argv[2],1);
+    if(r==1)
+    printf("[+] Success reading ip & port for tracker\n");
+    else
+    {
+        printf("[-] Failed reading ip & port\n");
+        exit(EXIT_FAILURE);
+    }
+
+    tracker_addr.sin_family = AF_INET; 
+    tracker_addr.sin_addr.s_addr = inet_addr(tracker_ipaddr); 
+    tracker_addr.sin_port = htons(tracker_port); 
+
+/*   int psdport;
+   cout<<"Enter tracker port \n";
    cin>>psdport;
     serv_addr.sin_family = AF_INET; 
     serv_addr.sin_port = htons(psdport); 
     serv_addr.sin_addr.s_addr=inet_addr("127.0.0.1"); 
+*/
    
-    int status =connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr));
+    int status =connect(sock, (struct sockaddr *)&tracker_addr, sizeof(tracker_addr));
     if(status<0) 
     { 
-        printf("\nConnection Failed \n"); 
-        return -1; 
+        printf("\nConnection Failed with tracker 1 \n");
+         //Connect with tracker 2
+         r=readfile(argv[2],2);
+         tracker_addr.sin_addr.s_addr = inet_addr(tracker_ipaddr); 
+         tracker_addr.sin_port = htons(tracker_port); 
+         status=connect(sock, (struct sockaddr *)&tracker_addr, sizeof(tracker_addr));
+         if(status<0)
+         {
+             printf("\nConnection Failed with tracker 2 also. Check if they are up\n");
+             return -1;
+         }
     } 
-    printf("[+] Connection established with server\n");
-    printf("[+] Connection established to %s:%d\n",inet_ntoa(serv_addr.sin_addr),ntohs(serv_addr.sin_port));
+    printf("[+] Connection established with tracker\n");
+    printf("[+] Connection established to %s:%d\n",inet_ntoa(tracker_addr.sin_addr),ntohs(tracker_addr.sin_port));
+
+    getsockname(sock, (struct sockaddr *) &my_addr, (socklen_t*)&my_addr_len);
+	inet_ntop(AF_INET, &my_addr.sin_addr, my_ip, sizeof(my_ip));
+	int myPort = ntohs(my_addr.sin_port);
+    printf("Client ip address: %s : %d\n", my_ip,myPort);
+//Login & create account has to be before he can opt for functionalities
+char username[50],password[50];
+int choice,login_valid,upload_valid;
+do
+{
+    cout<<"1.Create User\n";
+    cout<<"2.Login\n";
+    cout<<"Enter choice\n";
+    cin>>ch;
+    switch(ch)
+    {
+        case 1:
+        //strcpy(choice,"Create");
+            choice=1;
+            username[0]='\0';
+            send(sock,&choice,sizeof(int),0);
+            cout<<"Enter username:\n";
+            cin>>username;
+            send(sock,username,50,0);
+            password[0]='\0';
+            cout<<"Enter password:\n";
+            cin>>password;
+            send(sock,password,50,0);
+            int valid;
+            recv(sock,&valid,sizeof(valid),0);
+            if(valid)
+            cout<<"[+] Account created\n";
+            else
+            cout<<"[-] Account exists\n";
+            break;
+        case 2:
+            choice=2;
+            username[0]='\0';
+            password[0]='\0';
+            send(sock,&choice,sizeof(int),0);
+            cout<<"Enter username:\n";
+            cin>>username;
+            send(sock,username,50,0);
+            
+            cout<<"Enter password:\n";
+            cin>>password;
+            send(sock,password,50,0);
+            send(sock,my_ip,16,0);
+            send(sock,&port_for_servermode,sizeof(int),0);
+            recv(sock,&login_valid,sizeof(login_valid),0);
+            if(login_valid)
+            cout<<"[+] Login successful\n";
+            else
+            cout<<"[-] Invalid username/password\n";
+            break;
+        default:
+        break;
+    }
+
+}while(login_valid!=1);
+
+char filepath[100],upload_filename[100];
 
 //Menu for input from client
     do
     {
-        cout<<"1.Create User\n";
-        cout<<"2.Login\n";
         cout<<"3.List files\n";
         cout<<"4.Upload file\n";
         cout<<"5.Download file\n";
+        cout<<"6.List files\n";
+        cout<<"7.Stop Sharing\n";
+        cout<<"8.Logout\n";
         cout<<"Enter choice\n";
         cin>>ch;
         switch(ch)
         {
+            case 4:
+            choice=4;
+            send(sock,&choice,sizeof(int),0);
+            filepath[0]='\0';
+            upload_filename[0]='\0';
+            cout<<"Enter filename\n";
+            cin>>upload_filename;
+            cout<<"Enter file path\n";
+            cin>>filepath;
+
+            // need to calculate sha//
+
+            if(access(filepath, F_OK) != -1)
+            {
+                cout<<"File exists\n";
+                send(sock,upload_filename,strlen(upload_filename),0);
+                send(sock,filepath,strlen(filepath),0);
+                recv(sock,&upload_valid,sizeof(upload_valid),0);
+                if(upload_valid==1)
+                cout<<"[+] Upload successful\n";
+                else if(upload_valid==0)
+                cout<<"[-] Upload failed\n";
+                else
+                cout<<"[-] Sharing disabled\n";
+            }
+            else
+            {
+                cout<<"File doesnt exist\n";
+            }
+            
+            break;
             case 5:
              //Filename send
-            char fname[50];
+            choice=5;
+            send(sock,&choice,sizeof(int),0);
+            char fname[50],download_peer_ip[16],download_path[100];
+            int download_peer_port;
             cout<<"Enter file name\n";
             scanf("%s",fname);  
-            fp1=fopen(fname,"wb");
+
+            send(sock, fname,sizeof(fname),0);
+            recv(sock, &download_path,100,0);
+            recv(sock, &download_peer_ip,16,0);
+            recv(sock, &download_peer_port,sizeof(int),0);
+            printf("[+] Destination path : %s\n",download_path);
+            printf("[+] Destination ip : %s:%d\n",download_peer_ip,download_peer_port);
+            download_from_peer(fname,download_path,download_peer_ip,download_peer_port);
+            /*fp1=fopen(fname,"wb");
             if(fp1==NULL)
             cout<<"NULL"<<endl;
             //cout<<"[+] File opened"<<endl;
-            char Buffer1[BUFF_SIZE];
-            send(sock, fname,sizeof(fname),0);
+            char Buffer1[BUFF_SIZE];*/
             //File download
-            int file_size,n1;
+            /*int file_size,n1;
             recv(sock, &file_size, sizeof(file_size), 0);
             //cout<<file_size<<endl;
             while ( ( n1 = recv( sock , Buffer1 ,   BUFF_SIZE, 0) ) > 0 )
@@ -205,16 +390,16 @@ int main(int argc, char const *argv[])
 	            memset( Buffer1 , '\0', BUFF_SIZE);
                 //file_size = file_size - n1;
             } 
-            printf("[+] File Downloaded\n");
+            printf("[+] File Downloaded\n");*/
             break;
             default:
             break;
         }
 
-    }while(ch!=-1);
+    }while(ch!=8);
 
    
-    fclose(fp1);
+    //fclose(fp1);
     //printf("[+] File sent\n");
     close(sock);
     return 0; 
