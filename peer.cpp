@@ -49,18 +49,18 @@ void* request_handler(void* socket_desc)
     printf("In peer server client handler thread\n");
     int c_socket = *(int *)socket_desc;
     //printf("[+] Connection accepted from %s:%d\n",inet_ntoa(c_socket.sin_addr),ntohs(c_socket.sin_port));
-    string file = "/home/tomz/Desktop/";
+    //string file = "/home/tomz/Desktop/";
     string filename;
     char fn[50];
     //cout<<file<<endl;
     //cout<<c_socket<<endl;
     int ret=recv(c_socket, fn, sizeof(fn), 0);
-    printf("[+] Received filename : %s\n",fn);
+    printf("[+] Received filepath : %s\n",fn);
     filename=string(fn);
     cout<<filename<<endl;
-    file.append(filename);
-    cout<<file<<endl;
-    FILE *fp = fopen(file.c_str(),"r");
+    //file.append(filename);
+    //cout<<file<<endl;
+    FILE *fp = fopen(filename.c_str(),"r");
     //int sum;
     //cout<<"Enter something";
     //cin>>sum;
@@ -145,8 +145,8 @@ void* server_mode(void* port)
             cout<<"error in socket\n";
             exit(EXIT_FAILURE);
         }
-        printf("[+] Connection Accepted\n");
-        printf("[+] Connection accepted from %s:%d\n",inet_ntoa(client_address.sin_addr),ntohs(client_address.sin_port));
+        printf("[+]P2PS: Connection Accepted\n");
+        printf("[+]P2PS: Connection accepted from %s:%d\n",inet_ntoa(client_address.sin_addr),ntohs(client_address.sin_port));
         if(pthread_create(&thread_id,NULL,request_handler,(void *)&client_socket)<0)
         {
             printf("[-] Thread creation failed\n");
@@ -164,12 +164,13 @@ int download_from_peer(char filename[],char filepath[],char peerip[],int peerpor
     struct sockaddr_in peer_server_address;
     int peer_server_address_len=sizeof(peer_server_address);
     int peer_sock;
+    FILE *fp1;
     if ((peer_sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) 
     { 
         printf("\n Socket creation error \n"); 
         return -1; 
     } 
-   printf("[+]P2P: Socket creation done\n");
+   printf("[+]P2PC: Socket creation done\n");
     peer_server_address.sin_family = AF_INET; 
     peer_server_address.sin_addr.s_addr = inet_addr(peerip); 
     peer_server_address.sin_port = htons(peerport); 
@@ -179,7 +180,28 @@ int download_from_peer(char filename[],char filepath[],char peerip[],int peerpor
         printf("[-] Connection failed with peer server\n");
         return -1;
     }
-    printf("[+] Connection established to %s:%d\n",inet_ntoa(peer_server_address.sin_addr),ntohs(peer_server_address.sin_port));
+    printf("[+]P2PC: Connection established to %s:%d\n",inet_ntoa(peer_server_address.sin_addr),ntohs(peer_server_address.sin_port));
+    send(peer_sock,filepath,100,0);
+    fp1=fopen(filename,"wb");
+    if(fp1==NULL)
+    cout<<"NULL"<<endl;
+            //cout<<"[+] File opened"<<endl;
+    char Buffer1[BUFF_SIZE];
+            //File download
+    int file_size,n1;
+    recv(peer_sock, &file_size, sizeof(file_size), 0);
+    cout<<file_size<<endl;
+    while ( ( n1 = recv(peer_sock , Buffer1 ,   BUFF_SIZE, 0) ) > 0 )
+    {
+        //cout<<"receive\n";
+        //cout<<n1<<endl;
+        //cout<<Buffer1<<endl;
+	    fwrite(Buffer1 , sizeof(char), n1, fp1);
+        fflush(fp1);
+	    memset( Buffer1 , '\0', BUFF_SIZE);
+        //file_size = file_size - n1;
+    } 
+    printf("[+] File Downloaded\n");
 
 }
 
