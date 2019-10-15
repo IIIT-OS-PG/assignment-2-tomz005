@@ -75,7 +75,7 @@ void* request_handler(void* socket_desc)
     int size=ftell(fp);
     rewind(fp);
     //sending file size info to client peer
-    //cout<<size<<endl;
+    cout<<size<<endl;
     send(c_socket, &size,sizeof(size),0);
     while ( ( n = fread( Buffer , sizeof(char) , BUFF_SIZE , fp ) ) > 0  && size > 0 )
     {
@@ -83,10 +83,11 @@ void* request_handler(void* socket_desc)
         //cout<<n<<endl;
         //cout<<Buffer<<endl;
 		send (c_socket , Buffer, n, 0 );
+        fflush(fp);
    	 	memset ( Buffer , '\0', BUFF_SIZE);
 		size = size - n ;
     }
-
+    //fflush(fp);
     printf("[+] File sent\n");
     close(c_socket);
     fclose(fp);
@@ -333,37 +334,45 @@ do
 
 }while(login_valid!=1);
 
-char filepath[100],upload_filename[100];
+char filepath[100],upload_filename[100],feedback[100],checkfile[100];
 int download_valid=0;
 
 //Menu for input from client
     do
     {
-        cout<<"3.List files\n";
-        cout<<"4.Upload file\n";
-        cout<<"5.Download file\n";
-        cout<<"6.Stop Sharing\n";
-        cout<<"7.Logout\n";
+        cout<<"1.List files\n";
+        cout<<"2.Upload file\n";
+        cout<<"3.Download file\n";
+        cout<<"4.Stop Sharing\n";
+        cout<<"5.Logout\n";
         cout<<"Enter choice\n";
         cin>>ch;
         switch(ch)
         {
-            case 3:
+            case 1:
             choice=3;
             send(sock,&choice,sizeof(int),0);
+            recv(sock,feedback,100,0);
+            cout<<"[+] Files shared by the peers\n";
+            while(strcmp(feedback,"eof")!=0)
+            {
+                printf("    ->%s\n",feedback);
+                recv(sock,feedback,100,0);
+            }
             break;
-            case 4:
+            case 2:
             choice=4;
             send(sock,&choice,sizeof(int),0);
             filepath[0]='\0';
             upload_filename[0]='\0';
+            checkfile[0]='\0';
             cout<<"Enter filename\n";
             cin>>upload_filename;
             cout<<"Enter file path\n";
             cin>>filepath;
 
             // need to calculate sha//
-
+            strcat(filepath,upload_filename);
             if(access(filepath, F_OK) != -1)
             {
                 cout<<"File exists\n";
@@ -383,7 +392,7 @@ int download_valid=0;
             }
             
             break;
-            case 5:
+            case 3:
              //Filename send
             choice=5;
             send(sock,&choice,sizeof(int),0);
@@ -397,7 +406,7 @@ int download_valid=0;
             recv(sock,&download_valid,sizeof(int),0);
             if(download_valid)
             {
-                recv(sock, &download_path,100,0);
+                recv(sock, &download_path,sizeof(download_path),0);
                 recv(sock, &download_peer_ip,16,0);
                 recv(sock, &download_peer_port,sizeof(int),0);
                 printf("[+] Destination path : %s\n",download_path);
@@ -411,11 +420,11 @@ int download_valid=0;
             else
             cout<<"[-] File not present\n";
             break;
-            case 6:
+            case 4:
             choice=6;
             send(sock,&choice,sizeof(int),0);
             break;
-            case 7:
+            case 5:
             choice=7;
             send(sock,&choice,sizeof(int),0);
             break;
@@ -423,7 +432,7 @@ int download_valid=0;
             break;
         }
 
-    }while(ch!=7);
+    }while(ch!=5);
 
    
     //fclose(fp1);

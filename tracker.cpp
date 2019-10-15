@@ -70,6 +70,7 @@ bool write_to_upload_file(char username[], char filepath[],char upload_filename[
         printf("[-] File couldnt be opened\n");
         return 0;
     }
+    //strcat(filepath,upload_filename);
     fprintf(upload_fp,"%s %s %s\n",upload_filename,filepath,username);
     fclose(upload_fp);
     return 1;
@@ -102,6 +103,28 @@ int check_in_upload(char filename[], char download_filepath[],char download_user
     //cout<<"exit while loop\n";
     fclose(upload_fp);
     return 1;
+}
+
+void list_files(int cs)
+{
+    FILE *upload_fp=fopen("g1.txt","r");
+    char file_n[100],file_p[100],u[100],eof[100]="";
+    if(upload_fp==NULL)
+    {
+        printf("[-] File not present\n");
+    }
+    while(fscanf(upload_fp,"%s %s %s\n",file_n,file_p,u)!=EOF)
+    {
+        //cout<<file_n<<":"<<file_p<<":"<<u<<endl;
+        send(cs,file_n,100,0);
+        
+    }
+    //cout<<"exit while loop\n";
+    strcat(eof,"eof");
+    send(cs,eof,100,0);
+    fclose(upload_fp);
+    send(cs,eof,100,0);
+
 }
 void* client_handler(void* socket_desc)
 {
@@ -171,7 +194,7 @@ void* client_handler(void* socket_desc)
                 send(c_socket,&valid,sizeof(valid),0);
                 break;
                 case 3:
-
+                list_files(c_socket);
                 break;
                 case 4:
                 filepath[0]='\0';
@@ -195,10 +218,11 @@ void* client_handler(void* socket_desc)
                 case 5:
                 recv(c_socket,&download_filename,sizeof(download_filename),0);
                 //cout<<download_filename;
+                download_filepath[0]='\0';
+
                 download_valid=check_in_upload(download_filename,download_filepath,download_user);
                 //cout<<"back to main"<<download_valid<<endl;
                 //cout<<download_filepath<<": "<<download_user;
-                
                 if(download_valid)
                 {
                     //cout<<download_filepath<<"::"<<download_user<<endl;
