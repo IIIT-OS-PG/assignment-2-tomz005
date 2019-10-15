@@ -159,7 +159,7 @@ void* server_mode(void* port)
     close(peerserver_fd);
 }
 
-int download_from_peer(char filename[],char filepath[],char peerip[],int peerport)
+int download_from_peer(char filename[],char filepath[],char peerip[],int peerport,char downloadpath[])
 {
     struct sockaddr_in peer_server_address;
     int peer_server_address_len=sizeof(peer_server_address);
@@ -182,7 +182,9 @@ int download_from_peer(char filename[],char filepath[],char peerip[],int peerpor
     }
     printf("[+]P2PC: Connection established to %s:%d\n",inet_ntoa(peer_server_address.sin_addr),ntohs(peer_server_address.sin_port));
     send(peer_sock,filepath,100,0);
-    fp1=fopen(filename,"wb");
+    strcat(downloadpath,filename);
+    cout<<downloadpath<<endl;
+    fp1=fopen(downloadpath,"wb");
     if(fp1==NULL)
     cout<<"NULL"<<endl;
             //cout<<"[+] File opened"<<endl;
@@ -332,6 +334,7 @@ do
 }while(login_valid!=1);
 
 char filepath[100],upload_filename[100];
+int download_valid=0;
 
 //Menu for input from client
     do
@@ -339,13 +342,16 @@ char filepath[100],upload_filename[100];
         cout<<"3.List files\n";
         cout<<"4.Upload file\n";
         cout<<"5.Download file\n";
-        cout<<"6.List files\n";
-        cout<<"7.Stop Sharing\n";
-        cout<<"8.Logout\n";
+        cout<<"6.Stop Sharing\n";
+        cout<<"7.Logout\n";
         cout<<"Enter choice\n";
         cin>>ch;
         switch(ch)
         {
+            case 3:
+            choice=3;
+            send(sock,&choice,sizeof(int),0);
+            break;
             case 4:
             choice=4;
             send(sock,&choice,sizeof(int),0);
@@ -381,44 +387,43 @@ char filepath[100],upload_filename[100];
              //Filename send
             choice=5;
             send(sock,&choice,sizeof(int),0);
-            char fname[50],download_peer_ip[16],download_path[100];
+            char fname[50],download_peer_ip[16],download_path[100], fdown[100];
             int download_peer_port;
             cout<<"Enter file name\n";
             scanf("%s",fname);  
-
+            cout<<"Enter Download path\n";
+            scanf("%s",fdown);
             send(sock, fname,sizeof(fname),0);
-            recv(sock, &download_path,100,0);
-            recv(sock, &download_peer_ip,16,0);
-            recv(sock, &download_peer_port,sizeof(int),0);
-            printf("[+] Destination path : %s\n",download_path);
-            printf("[+] Destination ip : %s:%d\n",download_peer_ip,download_peer_port);
-            download_from_peer(fname,download_path,download_peer_ip,download_peer_port);
-            /*fp1=fopen(fname,"wb");
-            if(fp1==NULL)
-            cout<<"NULL"<<endl;
-            //cout<<"[+] File opened"<<endl;
-            char Buffer1[BUFF_SIZE];*/
-            //File download
-            /*int file_size,n1;
-            recv(sock, &file_size, sizeof(file_size), 0);
-            //cout<<file_size<<endl;
-            while ( ( n1 = recv( sock , Buffer1 ,   BUFF_SIZE, 0) ) > 0 )
+            recv(sock,&download_valid,sizeof(int),0);
+            if(download_valid)
             {
-                //cout<<"receive\n";
-                //cout<<n1<<endl;
-                //cout<<Buffer1<<endl;
-	            fwrite(Buffer1 , sizeof(char), n1, fp1);
-                fflush(fp1);
-	            memset( Buffer1 , '\0', BUFF_SIZE);
-                //file_size = file_size - n1;
-            } 
-            printf("[+] File Downloaded\n");*/
+                recv(sock, &download_path,100,0);
+                recv(sock, &download_peer_ip,16,0);
+                recv(sock, &download_peer_port,sizeof(int),0);
+                printf("[+] Destination path : %s\n",download_path);
+                printf("[+] Destination ip : %s:%d\n",download_peer_ip,download_peer_port);
+                download_from_peer(fname,download_path,download_peer_ip,download_peer_port,fdown);
+            }
+            else if(download_valid==0)
+            {
+                cout<<"[-] Peer not active\n";
+            }
+            else
+            cout<<"[-] File not present\n";
+            break;
+            case 6:
+            choice=6;
+            send(sock,&choice,sizeof(int),0);
+            break;
+            case 7:
+            choice=7;
+            send(sock,&choice,sizeof(int),0);
             break;
             default:
             break;
         }
 
-    }while(ch!=8);
+    }while(ch!=7);
 
    
     //fclose(fp1);
